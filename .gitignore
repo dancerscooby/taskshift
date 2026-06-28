@@ -1,10 +1,11 @@
 # Dependencies
 node_modules/
 
-# Environment / secrets
+# Environment / secrets — ignore real env files, allow examples
 .env
-.env.*
-*.env
+.env.local
+.env.*.local
+!.env.example
 
 # Netlify CLI
 .netlify/
