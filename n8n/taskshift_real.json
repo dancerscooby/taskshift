@@ -1,0 +1,55 @@
+{
+  "id": "b2c3d4e5-f6a7-8901-bcde-f23456789012",
+  "name": "TaskShift Real",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "taskshift",
+        "responseMode": "responseNode",
+        "options": { "allowedOrigins": "*" }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "taskshift-real"
+    },
+    {
+      "parameters": {
+        "jsCode": "// TaskShift Main Pipeline\n// Handles both actions: match_role and calculate\n\nconst GROQ_KEY = $env.GROQ_API_KEY || '__GROQ_KEY_PLACEHOLDER__';\nconst SUPABASE_URL = 'https://kvjoojdusypekzkvhqsm.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2am9vamR1c3lwZWt6a3ZocXNtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQxNDg5MSwiZXhwIjoyMDk3OTkwODkxfQ.u9lUf_ePHFORP4tV3sKvQF-_4cxg1ZsTjnmSymAkfKg';\nconst ALLOWLIST = ['Art Director', 'Sales Representative'];\n\nconst body = $input.first().json.body || $input.first().json;\nconst action = body.action;\n\n// ── MATCH ROLE ────────────────────────────────────────\nif (action === 'match_role') {\n  const roleInput = body.role_input || '';\n\n  // Groq Call 1 — role matching (temp=0, max_tokens=20)\n  const groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {\n    method: 'POST',\n    headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model: 'llama-3.3-70b-versatile',\n      temperature: 0,\n      max_tokens: 20,\n      messages: [\n        {\n          role: 'system',\n          content: 'You match a job title to exactly one occupation from this list. Reply with ONLY the occupation name, exactly as written. If no reasonable match exists, reply with exactly: UNKNOWN\\n\\nAllowed occupations:\\n- Art Director\\n- Sales Representative\\n\\nRules:\\n- Return exactly one name from the list, or UNKNOWN.\\n- Do not explain. Do not add punctuation. No quotes.\\n- Near-synonyms map to the closest match (e.g. \"creative director\" → Art Director, \"communication designer\" → Art Director, \"graphic designer\" → Art Director, \"business development\" → Sales Representative, \"merchant exporter\" → Sales Representative, \"BD manager\" → Sales Representative).\\n- If genuinely ambiguous between two, return UNKNOWN.'\n        },\n        { role: 'user', content: roleInput }\n      ]\n    })\n  });\n\n  if (!groqResp.ok) throw new Error('Groq Call 1 failed: ' + groqResp.status);\n  const groqData = await groqResp.json();\n  const matchedRaw = (groqData.choices?.[0]?.message?.content || '').trim();\n  const matched = ALLOWLIST.includes(matchedRaw) ? matchedRaw : null;\n\n  if (!matched) {\n    // Degrade: return low-confidence with empty task list\n    const lcRole = roleInput.toLowerCase();\n    const fallbackOcc = (lcRole.includes('sales') || lcRole.includes('buyer') || lcRole.includes('business'))\n      ? 'Sales Representative' : 'Art Director';\n    return [{ json: { action: 'match_role', matched_occupation: fallbackOcc, match_confidence: 'low', tasks: [] } }];\n  }\n\n  // Query Supabase tasks (display columns only)\n  const sbResp = await fetch(\n    `${SUPABASE_URL}/rest/v1/onet_tasks?occupation=eq.${encodeURIComponent(matched)}&select=id,task_description,default_weight&order=id`,\n    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }\n  );\n  if (!sbResp.ok) throw new Error('Supabase tasks query failed: ' + sbResp.status);\n  const tasks = await sbResp.json();\n\n  return [{ json: { action: 'match_role', matched_occupation: matched, match_confidence: 'high', tasks } }];\n}\n\n// ── CALCULATE ─────────────────────────────────────────\nif (action === 'calculate') {\n  const matchedOccupation = body.matched_occupation;\n  const matchConfidence = body.match_confidence || 'high';\n  const email = body.email || '';\n  const roleInput = body.role_input || matchedOccupation;\n  const userWeightsRaw = body.user_weights || {};\n\n  // Query Supabase full task rows (all scoring columns)\n  const sbResp = await fetch(\n    `${SUPABASE_URL}/rest/v1/onet_tasks?occupation=eq.${encodeURIComponent(matchedOccupation)}&select=id,task_description,default_weight,capability_score,mode_weight,human_necessity_discount,demand_elasticity_factor&order=id`,\n    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }\n  );\n  if (!sbResp.ok) throw new Error('Supabase score query failed: ' + sbResp.status);\n  const tasks = await sbResp.json();\n\n  // Formula: realised_exposure = Σ(t_i · c_i · m_i)\n  //          displacement_risk  = Σ(t_i · c_i · m_i · h_i · d_i)\n  const hasUserWeights = Object.keys(userWeightsRaw).length > 0;\n  let rawTotal = 0;\n  if (hasUserWeights) {\n    for (const task of tasks) rawTotal += parseFloat(userWeightsRaw[String(task.id)] ?? task.default_weight);\n  }\n  const weightSumOk = !hasUserWeights || (rawTotal >= 0.01 && rawTotal <= 5.0);\n\n  let realisedExposure = 0, displacementRisk = 0;\n  const taskDetails = [];\n\n  for (const task of tasks) {\n    const rawW = hasUserWeights\n      ? parseFloat(userWeightsRaw[String(task.id)] ?? task.default_weight)\n      : parseFloat(task.default_weight);\n    const t = (weightSumOk && rawTotal > 0) ? rawW / rawTotal : parseFloat(task.default_weight);\n    const c = parseFloat(task.capability_score);\n    const m = parseFloat(task.mode_weight);\n    const h = parseFloat(task.human_necessity_discount);\n    const d = parseFloat(task.demand_elasticity_factor);\n    const taskRE = t * c * m;\n    const taskDR = t * c * m * h * d;\n    realisedExposure += taskRE;\n    displacementRisk  += taskDR;\n    taskDetails.push({ id: task.id, task_description: task.task_description,\n      personal_weight: Math.round(t * 100) / 100,\n      realised_contrib: Math.round(taskRE * 1000) / 1000,\n      displacement_contrib: Math.round(taskDR * 1000) / 1000 });\n  }\n\n  realisedExposure = Math.min(1, Math.max(0, realisedExposure));\n  displacementRisk  = Math.min(1, Math.max(0, displacementRisk));\n  const reRounded = Math.round(realisedExposure * 1000) / 1000;\n  const drRounded = Math.round(displacementRisk  * 1000) / 1000;\n\n  const sorted = [...taskDetails].sort((a, b) => a.displacement_contrib - b.displacement_contrib);\n  const tasksToClimbToward = sorted.slice(0, 3).map(t => t.task_description);\n\n  // Groq Call 2 — AI-native role + roadmap (non-fatal if fails)\n  let aiNativeRoleText = null, roadmapText = null;\n  try {\n    const c2Resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },\n      body: JSON.stringify({\n        model: 'llama-3.3-70b-versatile',\n        temperature: 0.4,\n        max_tokens: 400,\n        messages: [\n          {\n            role: 'system',\n            content: 'You are writing two things for a working professional who has just seen their AI displacement score. Your job is to give them a map forward, not a verdict.\\n\\nRules:\\n- Do NOT invent numbers, percentages, or scores.\\n- Do NOT use doom-score language. No \"at risk\", \"threatened\", \"replaced\", \"obsolete\".\\n- Be specific and actionable. Generic advice is not acceptable.\\n- Write in plain, direct language.\\n- Base the roadmap strictly on the three tasks provided.'\n          },\n          {\n            role: 'user',\n            content: `Role: ${matchedOccupation}\\n\\nTheir three lowest-displacement tasks (tasks to climb toward):\\n1. ${tasksToClimbToward[0]}\\n2. ${tasksToClimbToward[1]}\\n3. ${tasksToClimbToward[2]}\\n\\nWrite two things:\\n\\n[AI_NATIVE_ROLE]\\nIn 2 sentences: describe what this role looks like when the person leans into the tasks above. Start with the occupation name.\\n\\n[ROADMAP]\\nThree specific, actionable steps this person can take THIS WEEK. Format as a numbered list. Each item max 2 sentences.`\n          }\n        ]\n      })\n    });\n    if (c2Resp.ok) {\n      const c2Data = await c2Resp.json();\n      const raw = (c2Data.choices?.[0]?.message?.content || '').trim();\n      const aiIdx = raw.indexOf('[AI_NATIVE_ROLE]');\n      const rmIdx = raw.indexOf('[ROADMAP]');\n      if (aiIdx !== -1 && rmIdx !== -1) {\n        aiNativeRoleText = raw.slice(aiIdx + 16, rmIdx).trim();\n        roadmapText = raw.slice(rmIdx + 9).trim();\n      } else {\n        roadmapText = raw;\n      }\n    }\n  } catch(e) {\n    roadmapText = 'Roadmap unavailable — Groq key not configured.';\n  }\n\n  // Save to user_submissions (non-fatal)\n  try {\n    await fetch(`${SUPABASE_URL}/rest/v1/user_submissions`, {\n      method: 'POST',\n      headers: {\n        'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Content-Type': 'application/json', 'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify({\n        role_input: roleInput, matched_occupation: matchedOccupation,\n        match_confidence: matchConfidence, email,\n        task_weights_json: userWeightsRaw,\n        realised_exposure_score: reRounded, displacement_risk_score: drRounded,\n        ai_native_role_text: aiNativeRoleText, roadmap_text: roadmapText\n      })\n    });\n  } catch(e) { /* non-fatal */ }\n\n  return [{ json: {\n    action: 'calculate', matched_occupation: matchedOccupation, match_confidence: matchConfidence,\n    realised_exposure_score: reRounded, displacement_risk_score: drRounded,\n    ai_native_role_text: aiNativeRoleText, roadmap: roadmapText\n  }}];\n}\n\nreturn [{ json: { error: 'unknown action', action } }];"
+      },
+      "id": "main-pipeline",
+      "name": "Main Pipeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Main Pipeline", "type": "main", "index": 0 }]]
+    },
+    "Main Pipeline": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": [],
+  "meta": { "templateCredsSetupCompleted": true },
+  "active": true
+}

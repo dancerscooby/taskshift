@@ -1,0 +1,4 @@
+-- SUPERSEDED. This file has been split into:
+--   02_onet_seed_runners.sql  — MVP dataset (core path, run at M6)
+--   02_onet_seed_buffer.sql   — Stretch roles (run only if ahead of schedule)
+-- Do not use this file.
