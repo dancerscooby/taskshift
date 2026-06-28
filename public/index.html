@@ -340,7 +340,7 @@
 </div>
 
 <script>
-  const N8N_WEBHOOK = "/api/taskshift";
+  const API_URL = "/api/taskshift";
 
   let appState = {
     roleInput: "",
@@ -375,7 +375,7 @@
     btn.textContent = "Finding your tasksâ€¦";
 
     try {
-      const res = await fetch(N8N_WEBHOOK, {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "match_role", role_input: roleInput, email })
@@ -475,7 +475,7 @@
     btn.textContent = "Calculatingâ€¦";
 
     try {
-      const res = await fetch(N8N_WEBHOOK, {
+      const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
