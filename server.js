@@ -9,7 +9,49 @@ app.use(express.static(path.join(__dirname, 'public')));
 const GROQ_KEY = process.env.GROQ_API_KEY;
 const SUPABASE_URL = 'https://kvjoojdusypekzkvhqsm.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const ALLOWLIST = ['Art Director', 'Sales Representative'];
+
+// Occupation list loaded from Supabase at startup.
+// This is the single source of truth — adding rows to onet_tasks
+// automatically makes them available after next restart.
+//
+// SCALING NOTE: this list-in-prompt approach works well up to ~50 occupations.
+// Beyond that, replace buildMatchPrompt() with an embedding-based lookup:
+//   1. Pre-compute and store title embeddings in Supabase (pgvector)
+//   2. Embed the user input at query time
+//   3. Nearest-neighbour search → candidate occupation
+//   4. Validate candidate exists in onet_tasks before returning
+// Everything downstream (fetchTasks, calculate, Supabase write) stays identical.
+let occupations = [];
+
+async function loadOccupations() {
+  const resp = await fetch(
+    `${SUPABASE_URL}/rest/v1/onet_tasks?select=occupation&order=occupation`,
+    { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } }
+  );
+  if (!resp.ok) throw new Error('Failed to load occupations from Supabase: ' + resp.status);
+  const rows = await resp.json();
+  occupations = [...new Set(rows.map(r => r.occupation))].sort();
+  console.log(`Loaded ${occupations.length} occupation(s): ${occupations.join(', ')}`);
+}
+
+function buildMatchPrompt() {
+  return [
+    'Match a job title to exactly one occupation from the list below.',
+    'Reply with ONLY the occupation name, exactly as it appears in the list.',
+    'If no occupation is a reasonable match, reply with exactly: UNKNOWN',
+    '',
+    'Occupations:',
+    ...occupations.map(o => `- ${o}`),
+    '',
+    'Rules:',
+    '- One name from the list, or UNKNOWN. Nothing else.',
+    '- No punctuation, no quotes, no explanation.',
+    '- Use semantic judgment: "software engineer" → Software Developer,',
+    '  "dev" → Software Developer, "account exec" → Sales Representative.',
+    '- If the role genuinely fits two occupations equally, return UNKNOWN.',
+    '- Roles outside the listed fields → UNKNOWN.',
+  ].join('\n');
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,70 +84,40 @@ async function fetchTasks(occupation, scoreColumns = false) {
     : 'id,task_description,default_weight';
   const resp = await fetch(
     `${SUPABASE_URL}/rest/v1/onet_tasks?occupation=eq.${encodeURIComponent(occupation)}&select=${cols}&order=id`,
-    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
+    { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } }
   );
   if (!resp.ok) throw new Error('Supabase query failed: ' + resp.status);
   return resp.json();
 }
 
-app.options('/api/taskshift', (req, res) => {
-  res.set(CORS_HEADERS).sendStatus(200);
-});
+app.options('/api/taskshift', (req, res) => res.set(CORS_HEADERS).sendStatus(200));
 
 app.post('/api/taskshift', async (req, res) => {
   res.set(CORS_HEADERS);
-
-  const body = req.body;
-  const action = body.action;
+  const { action } = req.body;
 
   // ── MATCH ROLE ────────────────────────────────────────────────────────────
   if (action === 'match_role') {
-    const roleInput = body.role_input || '';
+    const roleInput = (req.body.role_input || '').trim();
+    if (!roleInput) return res.status(400).json({ error: 'role_input is required' });
 
     let groqResp;
     try {
       groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           temperature: 0,
-          max_tokens: 20,
+          max_tokens: 30,
           messages: [
-            {
-              role: 'system',
-              content: [
-                'Match a job title to exactly one occupation from this list.',
-                'Reply with ONLY the occupation name, exactly as written.',
-                'If no reasonable match exists, reply with exactly: UNKNOWN',
-                '',
-                'Allowed occupations:',
-                ...ALLOWLIST.map(o => `- ${o}`),
-                '',
-                'Rules:',
-                '- Return exactly one name from the list, or UNKNOWN.',
-                '- Do not explain. Do not add punctuation. No quotes.',
-                '- Near-synonyms map to the closest match:',
-                '  "creative director" -> Art Director',
-                '  "communication designer" -> Art Director',
-                '  "graphic designer" -> Art Director',
-                '  "visual designer" -> Art Director',
-                '  "art director" -> Art Director',
-                '  "business development" -> Sales Representative',
-                '  "merchant exporter" -> Sales Representative',
-                '  "BD manager" -> Sales Representative',
-                '  "account executive" -> Sales Representative',
-                '  "sales manager" -> Sales Representative',
-                '- If genuinely ambiguous between two, return UNKNOWN.',
-                '- Roles outside the listed occupations should return UNKNOWN.'
-              ].join('\n')
-            },
+            { role: 'system', content: buildMatchPrompt() },
             { role: 'user', content: roleInput }
           ]
         })
       });
     } catch (e) {
-      return res.status(502).json({ error: 'Groq Call 1 network error: ' + e.message });
+      return res.status(502).json({ error: 'Groq unreachable: ' + e.message });
     }
 
     if (!groqResp.ok) {
@@ -114,7 +126,7 @@ app.post('/api/taskshift', async (req, res) => {
 
     const groqData = await groqResp.json();
     const matchedRaw = (groqData.choices?.[0]?.message?.content || '').trim();
-    const matched = ALLOWLIST.includes(matchedRaw) ? matchedRaw : null;
+    const matched = occupations.includes(matchedRaw) ? matchedRaw : null;
 
     if (!matched) {
       return res.json({
@@ -122,18 +134,13 @@ app.post('/api/taskshift', async (req, res) => {
         match_confidence: 'no_match',
         matched_occupation: null,
         tasks: [],
-        supported_occupations: ALLOWLIST
+        supported_occupations: occupations
       });
     }
 
     try {
       const tasks = await fetchTasks(matched);
-      return res.json({
-        action: 'match_role',
-        matched_occupation: matched,
-        match_confidence: 'high',
-        tasks
-      });
+      return res.json({ action: 'match_role', matched_occupation: matched, match_confidence: 'high', tasks });
     } catch (e) {
       return res.status(502).json({ error: e.message });
     }
@@ -141,11 +148,15 @@ app.post('/api/taskshift', async (req, res) => {
 
   // ── CALCULATE ─────────────────────────────────────────────────────────────
   if (action === 'calculate') {
-    const matchedOccupation = body.matched_occupation;
-    const matchConfidence = body.match_confidence || 'high';
-    const email = body.email || '';
-    const roleInput = body.role_input || matchedOccupation;
-    const userWeightsRaw = body.user_weights || {};
+    const matchedOccupation = req.body.matched_occupation;
+    const matchConfidence = req.body.match_confidence || 'high';
+    const email = req.body.email || '';
+    const roleInput = req.body.role_input || matchedOccupation;
+    const userWeightsRaw = req.body.user_weights || {};
+
+    if (!occupations.includes(matchedOccupation)) {
+      return res.status(400).json({ error: 'Unknown occupation: ' + matchedOccupation });
+    }
 
     let tasks;
     try {
@@ -154,7 +165,6 @@ app.post('/api/taskshift', async (req, res) => {
       return res.status(502).json({ error: e.message });
     }
 
-    // Normalise user weights
     const hasUserWeights = Object.keys(userWeightsRaw).length > 0;
     let rawTotal = 0;
     if (hasUserWeights) {
@@ -162,8 +172,6 @@ app.post('/api/taskshift', async (req, res) => {
     }
     const weightSumOk = !hasUserWeights || (rawTotal >= 0.01 && rawTotal <= 5.0);
 
-    // Formula: realised_exposure = Σ(t_i · c_i · m_i)
-    //          displacement_risk  = Σ(t_i · c_i · m_i · h_i · d_i)
     let realisedExposure = 0, displacementRisk = 0;
     const taskDetails = [];
 
@@ -176,33 +184,32 @@ app.post('/api/taskshift', async (req, res) => {
       const m = parseFloat(task.mode_weight);
       const h = parseFloat(task.human_necessity_discount);
       const d = parseFloat(task.demand_elasticity_factor);
-      const taskRE = t * c * m;
-      const taskDR = t * c * m * h * d;
-      realisedExposure += taskRE;
-      displacementRisk += taskDR;
+      const re = t * c * m;
+      const dr = t * c * m * h * d;
+      realisedExposure += re;
+      displacementRisk += dr;
       taskDetails.push({
         id: task.id,
         task_description: task.task_description,
         personal_weight: Math.round(t * 100) / 100,
-        realised_contrib: Math.round(taskRE * 1000) / 1000,
-        displacement_contrib: Math.round(taskDR * 1000) / 1000
+        realised_contrib: Math.round(re * 1000) / 1000,
+        displacement_contrib: Math.round(dr * 1000) / 1000
       });
     }
 
     realisedExposure = Math.min(1, Math.max(0, realisedExposure));
-    displacementRisk = Math.min(1, Math.max(0, displacementRisk));
+    displacementRisk  = Math.min(1, Math.max(0, displacementRisk));
     const reRounded = Math.round(realisedExposure * 1000) / 1000;
-    const drRounded = Math.round(displacementRisk * 1000) / 1000;
+    const drRounded = Math.round(displacementRisk  * 1000) / 1000;
 
     const sorted = [...taskDetails].sort((a, b) => a.displacement_contrib - b.displacement_contrib);
     const tasksToClimbToward = sorted.slice(0, 3).map(t => t.task_description);
 
-    // Groq Call 2 — AI-native role description + roadmap (non-fatal)
     let aiNativeRoleText = null, roadmapText = null;
     try {
       const c2Resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
+        headers: { Authorization: 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           temperature: 0.4,
@@ -246,46 +253,31 @@ app.post('/api/taskshift', async (req, res) => {
       if (c2Resp.ok) {
         const c2Data = await c2Resp.json();
         const raw = (c2Data.choices?.[0]?.message?.content || '').trim();
-        const parsed = parseGroqCall2(raw);
-        aiNativeRoleText = parsed.aiNativeRoleText;
-        roadmapText = parsed.roadmapText;
+        ({ aiNativeRoleText, roadmapText } = parseGroqCall2(raw));
       }
-    } catch {
-      roadmapText = 'Roadmap unavailable.';
-    }
+    } catch { roadmapText = 'Roadmap unavailable.'; }
 
-    // Persist to Supabase (non-fatal)
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/user_submissions`, {
         method: 'POST',
         headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=minimal'
+          apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json', Prefer: 'return=minimal'
         },
         body: JSON.stringify({
-          role_input: roleInput,
-          matched_occupation: matchedOccupation,
-          match_confidence: matchConfidence,
-          email,
+          role_input: roleInput, matched_occupation: matchedOccupation,
+          match_confidence: matchConfidence, email,
           task_weights_json: userWeightsRaw,
-          realised_exposure_score: reRounded,
-          displacement_risk_score: drRounded,
-          ai_native_role_text: aiNativeRoleText,
-          roadmap_text: roadmapText
+          realised_exposure_score: reRounded, displacement_risk_score: drRounded,
+          ai_native_role_text: aiNativeRoleText, roadmap_text: roadmapText
         })
       });
     } catch { /* non-fatal */ }
 
     return res.json({
-      action: 'calculate',
-      matched_occupation: matchedOccupation,
-      match_confidence: matchConfidence,
-      realised_exposure_score: reRounded,
-      displacement_risk_score: drRounded,
-      ai_native_role_text: aiNativeRoleText,
-      roadmap: roadmapText
+      action: 'calculate', matched_occupation: matchedOccupation, match_confidence: matchConfidence,
+      realised_exposure_score: reRounded, displacement_risk_score: drRounded,
+      ai_native_role_text: aiNativeRoleText, roadmap: roadmapText
     });
   }
 
@@ -293,6 +285,12 @@ app.post('/api/taskshift', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`TaskShift running on http://localhost:${PORT}`);
+app.listen(PORT, async () => {
+  try {
+    await loadOccupations();
+    console.log(`TaskShift running on http://localhost:${PORT}`);
+  } catch (e) {
+    console.error('FATAL: could not load occupations —', e.message);
+    process.exit(1);
+  }
 });
