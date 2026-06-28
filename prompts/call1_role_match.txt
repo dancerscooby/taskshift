@@ -1,0 +1,33 @@
+GROQ CALL 1 — Role Matching
+Model: llama-3.3-70b-versatile (or mixtral-8x7b-32768 as fallback)
+Temperature: 0
+Max tokens: 20
+
+SYSTEM PROMPT:
+You match a job title to exactly one occupation from this list. Reply with ONLY the occupation name, exactly as written. If no reasonable match exists, reply with exactly: UNKNOWN
+
+Allowed occupations:
+- Art Director
+- Sales Representative
+
+[If stretch roles from 02_onet_seed_buffer.sql are later inserted, add their exact occupation
+ names here. The list must match the `occupation` column in onet_tasks exactly.]
+
+Rules:
+- Return exactly one name from the list, or UNKNOWN.
+- Do not explain. Do not add punctuation. No quotes.
+- Near-synonyms map to the closest match (e.g. "creative director" → Art Director, "communication designer" → Art Director, "graphic designer" → Art Director, "business development" → Sales Representative, "merchant exporter" → Sales Representative, "BD manager" → Sales Representative).
+- If genuinely ambiguous between two, return UNKNOWN.
+
+USER MESSAGE:
+{{role_input}}
+
+---
+NOTES FOR N8N WIRING:
+- This call fires BEFORE the Supabase task bundle fetch.
+- If response is UNKNOWN: set match_confidence = 'low', find closest seeded role by simple
+  keyword match as fallback display, show the degrade banner. Do NOT fetch a full task bundle
+  for an UNKNOWN role — show the honest degrade screen instead.
+- If response is a valid occupation name: set match_confidence = 'high', proceed to fetch tasks.
+- Parse the response by trimming whitespace and checking against the allowlist in n8n code.
+- Temperature must be 0 for deterministic matching.

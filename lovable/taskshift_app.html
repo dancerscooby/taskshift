@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskShift — Know what AI is doing to your week</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #fff;
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .screen {
+      display: none;
+      width: 100%;
+      max-width: 640px;
+      padding: 48px 24px;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .screen.active { display: flex; }
+
+    h1 { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+    h2 { font-size: 1.5rem; font-weight: 700; }
+    p.sub { color: #555; font-size: 1rem; margin-top: 4px; }
+
+    label { font-size: 0.875rem; font-weight: 600; color: #333; }
+
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-top: 6px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus, input[type="email"]:focus {
+      border-color: #4f46e5;
+    }
+
+    button.primary {
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 14px 24px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+
+    button.primary:hover:not(:disabled) { background: #4338ca; }
+    button.primary:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    .error-msg {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #b91c1c;
+      font-size: 0.9rem;
+    }
+
+    .warn-banner {
+      background: #fefce8;
+      border: 1px solid #fde047;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #854d0e;
+      font-size: 0.875rem;
+    }
+
+    /* Screen 2 */
+    .task-list { display: flex; flex-direction: column; gap: 12px; }
+
+    .task-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .task-desc {
+      flex: 1;
+      font-size: 0.9rem;
+      color: #222;
+      line-height: 1.4;
+    }
+
+    .task-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    input[type="number"] {
+      width: 64px;
+      padding: 8px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      text-align: right;
+    }
+
+    input[type="number"]:focus { outline: none; border-color: #4f46e5; }
+
+    .pct-label { font-size: 0.9rem; color: #555; }
+
+    .total-bar {
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 12px 16px;
+      background: #f3f4f6;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .total-bar.ok { background: #ecfdf5; color: #065f46; }
+    .total-bar.over { background: #fef2f2; color: #b91c1c; }
+    .total-bar.under { background: #fffbeb; color: #92400e; }
+
+    /* Screen 3 */
+    .score-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 480px) {
+      .score-cards { grid-template-columns: 1fr; }
+      h1 { font-size: 1.6rem; }
+    }
+
+    .score-card {
+      border: 2px solid #e0e7ff;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      background: #eef2ff;
+    }
+
+    .score-val {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: #4f46e5;
+      line-height: 1;
+    }
+
+    .score-label {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .score-tip {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    .section-heading {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .prose-block {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #222;
+    }
+
+    .roadmap-list {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: #222;
+      list-style: none;
+    }
+
+    .roadmap-list li {
+      padding: 6px 0;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .roadmap-list li:last-child { border-bottom: none; }
+
+    .note-text { font-size: 0.8rem; color: #9ca3af; line-height: 1.5; }
+
+    .reset-link {
+      color: #4f46e5;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .skeleton-badge {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── SCREEN 1: Role Entry ── -->
+<div id="screen1" class="screen active">
+  <div>
+    <h1>What's your role? <span id="s1-skeleton" class="skeleton-badge" style="display:none">SKELETON MODE</span></h1>
+    <p class="sub">Find out what AI is actually doing to your week.</p>
+  </div>
+
+  <div>
+    <label for="role-input">Your role or job title</label>
+    <input type="text" id="role-input" placeholder="e.g. Financial Analyst, Marketing Manager" autocomplete="off" />
+  </div>
+
+  <div>
+    <label for="email-input">Email</label>
+    <input type="email" id="email-input" placeholder="Your email — unlocks your roadmap" />
+  </div>
+
+  <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks →</button>
+  <div id="s1-error" class="error-msg" style="display:none"></div>
+</div>
+
+<!-- ── SCREEN 2: Task Re-weight ── -->
+<div id="screen2" class="screen">
+  <div>
+    <h2>How do you actually spend your week?</h2>
+    <p class="sub">Adjust each task to match your real week. The total must equal 100%.</p>
+  </div>
+
+  <div id="s2-warn-banner" class="warn-banner" style="display:none"></div>
+
+  <div id="task-list" class="task-list"></div>
+
+  <div id="total-bar" class="total-bar"></div>
+
+  <button class="primary" id="s2-btn" onclick="submitCalculate()" disabled>Calculate my score →</button>
+  <div id="s2-error" class="error-msg" style="display:none"></div>
+</div>
+
+<!-- ── SCREEN 3: Results ── -->
+<div id="screen3" class="screen">
+  <div>
+    <h2>Your TaskShift results <span id="s3-skeleton" class="skeleton-badge" style="display:none">SKELETON MODE</span></h2>
+  </div>
+
+  <div id="s3-warn-banner" class="warn-banner" style="display:none"></div>
+
+  <div class="score-cards">
+    <div class="score-card">
+      <div class="score-val" id="exposure-val">—</div>
+      <div class="score-label">Realised Exposure<br>Share of your week AI can already do</div>
+      <div class="score-tip">Based on real AI usage in this role today — not just what's theoretically possible.</div>
+    </div>
+    <div class="score-card">
+      <div class="score-val" id="risk-val">—</div>
+      <div class="score-label">Displacement Risk<br>Share likely to shift away from this role</div>
+      <div class="score-tip">Filtered for real-world friction: trust, regulation, and demand growth.</div>
+    </div>
+  </div>
+
+  <hr class="divider" />
+
+  <div>
+    <div class="section-heading">What this role looks like when you move up</div>
+    <div class="prose-block" id="ai-native-text"></div>
+  </div>
+
+  <div>
+    <div class="section-heading">Three tasks to climb toward this week</div>
+    <ul class="roadmap-list" id="roadmap-list"></ul>
+  </div>
+
+  <p class="note-text" id="note-text"></p>
+
+  <button class="reset-link" onclick="resetApp()">← Start over</button>
+</div>
+
+<script>
+  const N8N_WEBHOOK = "https://inventory-handbook-ideal-employee.trycloudflare.com/webhook/taskshift";
+
+  let appState = {
+    roleInput: "",
+    email: "",
+    matchedOccupation: "",
+    matchConfidence: "",
+    tasks: []
+  };
+
+  function show(screenId) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    document.getElementById(screenId).classList.add("active");
+    window.scrollTo(0, 0);
+  }
+
+  // ── Screen 1 ──
+  async function submitRole() {
+    const roleInput = document.getElementById("role-input").value.trim();
+    const email = document.getElementById("email-input").value.trim();
+    const errEl = document.getElementById("s1-error");
+    const btn = document.getElementById("s1-btn");
+
+    errEl.style.display = "none";
+    if (!roleInput) { showError(errEl, "Please enter your role."); return; }
+    if (!email || !email.includes("@")) { showError(errEl, "Please enter a valid email."); return; }
+
+    appState.roleInput = roleInput;
+    appState.email = email;
+
+    btn.disabled = true;
+    btn.textContent = "Finding your tasks…";
+
+    try {
+      const res = await fetch(N8N_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "match_role", role_input: roleInput, email })
+      });
+      if (!res.ok) throw new Error("Server error " + res.status);
+      const data = await res.json();
+
+      appState.matchedOccupation = data.matched_occupation;
+      appState.matchConfidence = data.match_confidence;
+      appState.tasks = data.tasks || [];
+
+      buildScreen2(data);
+      show("screen2");
+    } catch (e) {
+      showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Show my tasks →";
+    }
+  }
+
+  function buildScreen2(data) {
+    // Warn banner
+    const banner = document.getElementById("s2-warn-banner");
+    if (data.match_confidence === "low") {
+      banner.style.display = "";
+      banner.textContent = `We matched you to "${data.matched_occupation}" with low confidence. Results are directional, not precise.`;
+    } else {
+      banner.style.display = "none";
+    }
+
+    // Task rows
+    const list = document.getElementById("task-list");
+    list.innerHTML = "";
+    (data.tasks || []).forEach(task => {
+      const defaultPct = Math.round((task.default_weight || 0) * 100);
+      const row = document.createElement("div");
+      row.className = "task-row";
+      row.innerHTML = `
+        <div class="task-desc">${task.task_description.length > 120 ? task.task_description.slice(0, 120) + "…" : task.task_description}</div>
+        <div class="task-input-wrap">
+          <input type="number" class="task-pct" data-id="${task.id}" min="0" max="100" value="${defaultPct}" />
+          <span class="pct-label">%</span>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    document.querySelectorAll(".task-pct").forEach(inp => {
+      inp.addEventListener("input", updateTotal);
+    });
+
+    updateTotal();
+  }
+
+  function updateTotal() {
+    const inputs = document.querySelectorAll(".task-pct");
+    let total = 0;
+    inputs.forEach(inp => { total += parseInt(inp.value || "0", 10); });
+
+    const bar = document.getElementById("total-bar");
+    const btn = document.getElementById("s2-btn");
+
+    bar.className = "total-bar";
+    if (total === 100) {
+      bar.classList.add("ok");
+      bar.textContent = `Total: ${total}% ✓ Ready`;
+      btn.disabled = false;
+    } else if (total > 100) {
+      bar.classList.add("over");
+      bar.textContent = `Total: ${total}% — reduce by ${total - 100}%`;
+      btn.disabled = true;
+    } else {
+      bar.classList.add("under");
+      bar.textContent = `Total: ${total}% — add ${100 - total}% more`;
+      btn.disabled = true;
+    }
+  }
+
+  // ── Screen 2 ──
+  async function submitCalculate() {
+    const errEl = document.getElementById("s2-error");
+    const btn = document.getElementById("s2-btn");
+    errEl.style.display = "none";
+
+    const userWeights = {};
+    document.querySelectorAll(".task-pct").forEach(inp => {
+      userWeights[inp.dataset.id] = parseInt(inp.value || "0", 10) / 100;
+    });
+
+    btn.disabled = true;
+    btn.textContent = "Calculating…";
+
+    try {
+      const res = await fetch(N8N_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "calculate",
+          role_input: appState.roleInput,
+          email: appState.email,
+          matched_occupation: appState.matchedOccupation,
+          match_confidence: appState.matchConfidence,
+          user_weights: userWeights
+        })
+      });
+      if (!res.ok) throw new Error("Server error " + res.status);
+      const data = await res.json();
+
+      buildScreen3(data);
+      show("screen3");
+    } catch (e) {
+      showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
+      btn.disabled = false;
+      btn.textContent = "Calculate my score →";
+    }
+  }
+
+  function buildScreen3(data) {
+    // Skeleton badge
+    document.getElementById("s3-skeleton").style.display = data.skeleton_mode ? "" : "none";
+
+    // Warn banner
+    const banner = document.getElementById("s3-warn-banner");
+    if (data.match_confidence === "low") {
+      banner.style.display = "";
+      banner.textContent = `We matched you to "${data.matched_occupation}" with low confidence. Results are directional, not precise.`;
+    } else {
+      banner.style.display = "none";
+    }
+
+    // Scores
+    document.getElementById("exposure-val").textContent =
+      ((data.realised_exposure_score || 0) * 100).toFixed(1) + "%";
+    document.getElementById("risk-val").textContent =
+      ((data.displacement_risk_score || 0) * 100).toFixed(1) + "%";
+
+    // AI-native role
+    document.getElementById("ai-native-text").textContent = data.ai_native_role_text || "—";
+
+    // Roadmap (numbered list if starts with "1.")
+    const roadmapEl = document.getElementById("roadmap-list");
+    roadmapEl.innerHTML = "";
+    const raw = (data.roadmap || data.roadmap_text || "").trim();
+    if (raw.startsWith("1.")) {
+      raw.split(/\n/).forEach(line => {
+        if (line.trim()) {
+          const li = document.createElement("li");
+          li.textContent = line.trim();
+          roadmapEl.appendChild(li);
+        }
+      });
+    } else {
+      const li = document.createElement("li");
+      li.textContent = raw;
+      roadmapEl.appendChild(li);
+    }
+
+    // Note
+    document.getElementById("note-text").textContent =
+      `These scores reflect your time allocation, not the average for ${data.matched_occupation}. Change your task weights to see how your score shifts.`;
+  }
+
+  function resetApp() {
+    appState = { roleInput: "", email: "", matchedOccupation: "", matchConfidence: "", tasks: [] };
+    document.getElementById("role-input").value = "";
+    document.getElementById("email-input").value = "";
+    document.getElementById("s1-error").style.display = "none";
+    document.getElementById("s2-btn").textContent = "Calculate my score →";
+    show("screen1");
+  }
+
+  function showError(el, msg) {
+    el.textContent = msg;
+    el.style.display = "";
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+*.env
+
+# Netlify CLI
+.netlify/
+
+# Claude Code internal
+.claude/
+
+# Planning / local-only docs
+PROJECT_PLAN.md
+DECISIONS.md
+MILESTONES.md
+ARCHITECTURE.md
+
+# Binaries / PDFs
+*.pdf
+
+# OS
+.DS_Store
+Thumbs.db
