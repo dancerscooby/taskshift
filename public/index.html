@@ -212,6 +212,26 @@
 
     .note-text { font-size: 0.8rem; color: #9ca3af; line-height: 1.5; }
 
+    .no-match-box {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 0.9rem;
+      color: #0c4a6e;
+      line-height: 1.6;
+    }
+
+    .no-match-box strong { display: block; margin-bottom: 6px; font-size: 1rem; }
+
+    .no-match-box ul {
+      margin: 8px 0 0 16px;
+      padding: 0;
+    }
+
+    .no-match-box ul li { margin: 2px 0; cursor: pointer; color: #0369a1; text-decoration: underline; }
+    .no-match-box ul li:hover { color: #0c4a6e; }
+
     .reset-link {
       color: #4f46e5;
       font-size: 0.9rem;
@@ -261,6 +281,7 @@
 
   <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks â†’</button>
   <div id="s1-error" class="error-msg" style="display:none"></div>
+  <div id="s1-no-match" class="no-match-box" style="display:none"></div>
 </div>
 
 <!-- â”€â”€ SCREEN 2: Task Re-weight â”€â”€ -->
@@ -343,6 +364,7 @@
     const btn = document.getElementById("s1-btn");
 
     errEl.style.display = "none";
+    document.getElementById("s1-no-match").style.display = "none";
     if (!roleInput) { showError(errEl, "Please enter your role."); return; }
     if (!email || !email.includes("@")) { showError(errEl, "Please enter a valid email."); return; }
 
@@ -360,6 +382,11 @@
       });
       if (!res.ok) throw new Error("Server error " + res.status);
       const data = await res.json();
+
+      if (data.match_confidence === "no_match") {
+        showNoMatch(data.supported_occupations || []);
+        return;
+      }
 
       appState.matchedOccupation = data.matched_occupation;
       appState.matchConfidence = data.match_confidence;
@@ -524,6 +551,20 @@
     document.getElementById("s1-error").style.display = "none";
     document.getElementById("s2-btn").textContent = "Calculate my score â†’";
     show("screen1");
+  }
+
+  function showNoMatch(supportedOccupations) {
+    const box = document.getElementById("s1-no-match");
+    const list = supportedOccupations.map(occ =>
+      `<li onclick="document.getElementById('role-input').value='${occ}'">${occ}</li>`
+    ).join("");
+    box.innerHTML = `
+      <strong>We don't have data for that occupation yet.</strong>
+      TaskShift currently supports ${supportedOccupations.length} occupation${supportedOccupations.length !== 1 ? "s" : ""}.
+      Try one of the supported roles, or check back as we expand the dataset:
+      <ul>${list}</ul>
+    `;
+    box.style.display = "";
   }
 
   function showError(el, msg) {

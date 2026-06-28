@@ -18,6 +18,9 @@ DECISIONS.md
 MILESTONES.md
 ARCHITECTURE.md
 
+# n8n workflow JSON — contains embedded credentials, deprecated architecture
+n8n/taskshift_real.json
+
 # Binaries / PDFs
 *.pdf
 
