@@ -587,11 +587,13 @@
       <ul>${list}</ul>
     `;
     box.style.display = "";
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   function showError(el, msg) {
     el.textContent = msg;
     el.style.display = "";
+    el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 </script>
 </body>
