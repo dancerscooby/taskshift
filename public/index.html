@@ -270,7 +270,7 @@
 
   <div>
     <label for="email-input">Email</label>
-    <input type=”email” id=”email-input” placeholder=”Your email &mdash; unlocks your roadmap” />
+    <input type=”email” id=”email-input” placeholder=”Your email — unlocks your roadmap” />
   </div>
 
   <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks &#8594;</button>
@@ -392,7 +392,7 @@
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Show my tasks &#8594;";
+      btn.textContent = "Show my tasks →";
     }
   }
 
@@ -489,7 +489,7 @@
     } catch (e) {
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
       btn.disabled = false;
-      btn.textContent = "Calculate my score &#8594;";
+      btn.textContent = "Calculate my score →";
     }
   }
 
@@ -544,7 +544,7 @@
     document.getElementById("email-input").value = "";
     document.getElementById("s1-error").style.display = "none";
     document.getElementById("s1-no-match").style.display = "none";
-    document.getElementById("s2-btn").textContent = "Calculate my score &#8594;";
+    document.getElementById("s2-btn").textContent = "Calculate my score →";
     show("screen1");
   }
 
