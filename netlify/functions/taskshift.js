@@ -1,7 +1,18 @@
 const GROQ_KEY = process.env.GROQ_API_KEY;
 const SUPABASE_URL = 'https://kvjoojdusypekzkvhqsm.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
-const ALLOWLIST = ['Art Director', 'Sales Representative'];
+const ALLOWLIST = [
+  'Accountant',
+  'Art Director',
+  'Customer Service Representative',
+  'Data Analyst',
+  'Graphic Designer',
+  'Marketing Manager',
+  'Project Manager',
+  'Registered Nurse',
+  'Sales Representative',
+  'Software Developer'
+];
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -55,11 +66,11 @@ exports.handler = async (event) => {
 
   const action = body.action;
 
-  // ── MATCH ROLE ────────────────────────────────────────────────────────────
+  // â”€â”€ MATCH ROLE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (action === 'match_role') {
     const roleInput = body.role_input || '';
 
-    // Groq Call 1 — deterministic role match (temp=0, max_tokens=20)
+    // Groq Call 1 â€” deterministic role match (temp=0, max_tokens=20)
     const groqResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
@@ -71,30 +82,20 @@ exports.handler = async (event) => {
           {
             role: 'system',
             content: [
-              'Match a job title to exactly one occupation from this list.',
-              'Reply with ONLY the occupation name, exactly as written.',
-              'If no reasonable match exists, reply with exactly: UNKNOWN',
+              'Match a job title to exactly one occupation from the list below.',
+              'Reply with ONLY the occupation name, exactly as it appears in the list.',
+              'If no occupation is a reasonable match, reply with exactly: UNKNOWN',
               '',
-              'Allowed occupations:',
-              '- Art Director',
-              '- Sales Representative',
+              'Occupations:',
+              ...ALLOWLIST.map(o => '- ' + o),
               '',
               'Rules:',
-              '- Return exactly one name from the list, or UNKNOWN.',
-              '- Do not explain. Do not add punctuation. No quotes.',
-              '- Near-synonyms map to the closest match:',
-              '  "creative director" -> Art Director',
-              '  "communication designer" -> Art Director',
-              '  "graphic designer" -> Art Director',
-              '  "visual designer" -> Art Director',
-              '  "art director" -> Art Director',
-              '  "business development" -> Sales Representative',
-              '  "merchant exporter" -> Sales Representative',
-              '  "BD manager" -> Sales Representative',
-              '  "account executive" -> Sales Representative',
-              '  "sales manager" -> Sales Representative',
-              '- If genuinely ambiguous between two, return UNKNOWN.',
-              '- Roles outside creative/design/sales fields should return UNKNOWN.'
+              '- One name from the list, or UNKNOWN. Nothing else.',
+              '- No punctuation, no quotes, no explanation.',
+              '- Use semantic judgment: "software engineer" -> Software Developer,',
+              '  "dev" -> Software Developer, "account exec" -> Sales Representative.',
+              '- If the role genuinely fits two occupations equally, return UNKNOWN.',
+              '- Roles outside the listed fields -> UNKNOWN.'
             ].join('\n')
           },
           { role: 'user', content: roleInput }
@@ -108,20 +109,19 @@ exports.handler = async (event) => {
     const matched = ALLOWLIST.includes(matchedRaw) ? matchedRaw : null;
 
     if (!matched) {
-      // Degrade path: choose closest seeded role by keyword heuristic,
-      // then still fetch its tasks so Screen 2 has sliders to show.
-      const lcRole = roleInput.toLowerCase();
-      const fallbackOcc = (lcRole.includes('sales') || lcRole.includes('buyer') || lcRole.includes('business') || lcRole.includes('commerce'))
-        ? 'Sales Representative' : 'Art Director';
-      try {
-        const tasks = await fetchTasks(fallbackOcc);
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ action: 'match_role', matched_occupation: fallbackOcc, match_confidence: 'low', tasks }) };
-      } catch {
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ action: 'match_role', matched_occupation: fallbackOcc, match_confidence: 'low', tasks: [] }) };
-      }
+      return {
+        statusCode: 200, headers: CORS,
+        body: JSON.stringify({
+          action: 'match_role',
+          match_confidence: 'no_match',
+          matched_occupation: null,
+          tasks: [],
+          supported_occupations: ALLOWLIST
+        })
+      };
     }
 
-    // High-confidence match — fetch display-only task columns
+    // High-confidence match â€” fetch display-only task columns
     try {
       const tasks = await fetchTasks(matched);
       return { statusCode: 200, headers: CORS, body: JSON.stringify({ action: 'match_role', matched_occupation: matched, match_confidence: 'high', tasks }) };
@@ -130,13 +130,17 @@ exports.handler = async (event) => {
     }
   }
 
-  // ── CALCULATE ─────────────────────────────────────────────────────────────
+  // â”€â”€ CALCULATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (action === 'calculate') {
     const matchedOccupation = body.matched_occupation;
     const matchConfidence = body.match_confidence || 'high';
     const email = body.email || '';
     const roleInput = body.role_input || matchedOccupation;
     const userWeightsRaw = body.user_weights || {};
+
+    if (!ALLOWLIST.includes(matchedOccupation)) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Unknown occupation: ' + matchedOccupation }) };
+    }
 
     let tasks;
     try {
@@ -153,8 +157,8 @@ exports.handler = async (event) => {
     }
     const weightSumOk = !hasUserWeights || (rawTotal >= 0.01 && rawTotal <= 5.0);
 
-    // Formula: realised_exposure = Σ(t_i · c_i · m_i)
-    //          displacement_risk  = Σ(t_i · c_i · m_i · h_i · d_i)
+    // Formula: realised_exposure = Î£(t_i Â· c_i Â· m_i)
+    //          displacement_risk  = Î£(t_i Â· c_i Â· m_i Â· h_i Â· d_i)
     let realisedExposure = 0, displacementRisk = 0;
     const taskDetails = [];
 
@@ -189,7 +193,7 @@ exports.handler = async (event) => {
     const sorted = [...taskDetails].sort((a, b) => a.displacement_contrib - b.displacement_contrib);
     const tasksToClimbToward = sorted.slice(0, 3).map(t => t.task_description);
 
-    // Groq Call 2 — AI-native role description + roadmap (non-fatal)
+    // Groq Call 2 â€” AI-native role description + roadmap (non-fatal)
     let aiNativeRoleText = null, roadmapText = null;
     try {
       const c2Resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -204,14 +208,14 @@ exports.handler = async (event) => {
               role: 'system',
               content: [
                 'You write structured career guidance for a working professional.',
-                'Your output MUST follow this exact format — include the marker lines verbatim:',
+                'Your output MUST follow this exact format â€” include the marker lines verbatim:',
                 '',
                 '[AI_NATIVE_ROLE]',
                 '<2 sentences starting with the occupation name>',
                 '[ROADMAP]',
-                '1. <first step — max 2 sentences>',
-                '2. <second step — max 2 sentences>',
-                '3. <third step — max 2 sentences>',
+                '1. <first step â€” max 2 sentences>',
+                '2. <second step â€” max 2 sentences>',
+                '3. <third step â€” max 2 sentences>',
                 '',
                 'Rules:',
                 '- Do NOT invent numbers, percentages, or scores.',
