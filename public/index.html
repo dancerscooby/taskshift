@@ -270,10 +270,10 @@
 
   <div>
     <label for="email-input">Email</label>
-    <input type="email" id="email-input" placeholder="Your email â€” unlocks your roadmap" />
+    <input type=”email” id=”email-input” placeholder=”Your email &mdash; unlocks your roadmap” />
   </div>
 
-  <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks â†’</button>
+  <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks &#8594;</button>
   <div id="s1-error" class="error-msg" style="display:none"></div>
   <div id="s1-no-match" class="no-match-box" style="display:none"></div>
 </div>
@@ -291,7 +291,7 @@
 
   <div id="total-bar" class="total-bar"></div>
 
-  <button class="primary" id="s2-btn" onclick="submitCalculate()" disabled>Calculate my score â†’</button>
+  <button class="primary" id="s2-btn" onclick="submitCalculate()" disabled>Calculate my score &#8594;</button>
   <div id="s2-error" class="error-msg" style="display:none"></div>
 </div>
 
@@ -392,7 +392,7 @@
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Show my tasks â†’";
+      btn.textContent = "Show my tasks &#8594;";
     }
   }
 
@@ -489,7 +489,7 @@
     } catch (e) {
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
       btn.disabled = false;
-      btn.textContent = "Calculate my score â†’";
+      btn.textContent = "Calculate my score &#8594;";
     }
   }
 
@@ -544,7 +544,7 @@
     document.getElementById("email-input").value = "";
     document.getElementById("s1-error").style.display = "none";
     document.getElementById("s1-no-match").style.display = "none";
-    document.getElementById("s2-btn").textContent = "Calculate my score â†’";
+    document.getElementById("s2-btn").textContent = "Calculate my score &#8594;";
     show("screen1");
   }
 
