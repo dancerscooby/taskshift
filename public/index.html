@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TaskShift â€” Know what AI is doing to your week</title>
+  <title>TaskShift — Know what AI is doing to your week</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -21,9 +21,9 @@
       display: none;
       width: 100%;
       max-width: 640px;
-      padding: 48px 24px;
+      padding: 48px 24px 80px;
       flex-direction: column;
-      gap: 24px;
+      gap: 28px;
     }
 
     .screen.active { display: flex; }
@@ -32,7 +32,7 @@
     h2 { font-size: 1.5rem; font-weight: 700; }
     p.sub { color: #555; font-size: 1rem; margin-top: 4px; }
 
-    label { font-size: 0.875rem; font-weight: 600; color: #333; }
+    label { font-size: 0.875rem; font-weight: 600; color: #333; display: block; margin-bottom: 6px; }
 
     input[type="text"], input[type="email"] {
       width: 100%;
@@ -40,13 +40,13 @@
       border: 2px solid #ddd;
       border-radius: 8px;
       font-size: 1rem;
-      margin-top: 6px;
       outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     input[type="text"]:focus, input[type="email"]:focus {
       border-color: #4f46e5;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
     }
 
     button.primary {
@@ -88,18 +88,19 @@
 
     .task-row {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      align-items: flex-start;
+      gap: 14px;
       background: #f9fafb;
+      border: 1px solid #e5e7eb;
       border-radius: 8px;
-      padding: 12px 14px;
+      padding: 14px 16px;
     }
 
     .task-desc {
       flex: 1;
       font-size: 0.9rem;
-      color: #222;
-      line-height: 1.4;
+      color: #374151;
+      line-height: 1.5;
     }
 
     .task-input-wrap {
@@ -107,6 +108,7 @@
       align-items: center;
       gap: 4px;
       flex-shrink: 0;
+      padding-top: 1px;
     }
 
     input[type="number"] {
@@ -145,6 +147,9 @@
     @media (max-width: 480px) {
       .score-cards { grid-template-columns: 1fr; }
       h1 { font-size: 1.6rem; }
+      .screen { padding: 32px 16px 64px; }
+      .task-row { gap: 10px; }
+      .score-card { padding: 16px; }
     }
 
     .score-card {
@@ -187,39 +192,63 @@
     .prose-block {
       background: #f9fafb;
       border-radius: 8px;
-      padding: 16px;
-      font-size: 0.95rem;
-      line-height: 1.6;
-      color: #222;
+      padding: 18px;
+      font-size: 0.925rem;
+      line-height: 1.7;
+      color: #1f2937;
     }
 
     .roadmap-list {
-      background: #f9fafb;
-      border-radius: 8px;
-      padding: 16px;
+      background: none;
+      border-radius: 0;
+      padding: 0;
       font-size: 0.95rem;
       line-height: 1.6;
       color: #222;
       list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .roadmap-list li {
-      padding: 6px 0;
-      border-bottom: 1px solid #e5e7eb;
+      padding: 16px;
+      border-bottom: none;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      color: #1f2937;
+      border-left: 3px solid #c7d2fe;
     }
 
     .roadmap-list li:last-child { border-bottom: none; }
 
-    .note-text { font-size: 0.8rem; color: #9ca3af; line-height: 1.5; }
+    .note-text { font-size: 0.8rem; color: #6b7280; line-height: 1.6; background: #f9fafb; border-left: 3px solid #e0e7ff; border-radius: 0 6px 6px 0; padding: 12px 14px; }
 
-    .reset-link {
-      color: #4f46e5;
-      font-size: 0.9rem;
+    .reset-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #6b7280;
+      font-size: 0.875rem;
+      font-weight: 500;
       cursor: pointer;
-      text-decoration: underline;
       background: none;
-      border: none;
-      padding: 0;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px 20px;
+      width: 100%;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .reset-btn:hover { color: #4f46e5; border-color: #c7d2fe; }
+
+    .screen3-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-top: 4px;
     }
 
     .divider {
@@ -305,12 +334,12 @@
 
   <div class="score-cards">
     <div class="score-card">
-      <div class="score-val" id="exposure-val">â€”</div>
+      <div class="score-val" id="exposure-val">—</div>
       <div class="score-label">Realised Exposure<br>Share of your week AI can already do</div>
-      <div class="score-tip">Based on real AI usage in this role today â€” not just what's theoretically possible.</div>
+      <div class="score-tip">Based on real AI usage in this role today — not just what's theoretically possible.</div>
     </div>
     <div class="score-card">
-      <div class="score-val" id="risk-val">â€”</div>
+      <div class="score-val" id="risk-val">—</div>
       <div class="score-label">Displacement Risk<br>Share likely to shift away from this role</div>
       <div class="score-tip">Filtered for real-world friction: trust, regulation, and demand growth.</div>
     </div>
@@ -328,9 +357,10 @@
     <ul class="roadmap-list" id="roadmap-list"></ul>
   </div>
 
-  <p class="note-text" id="note-text"></p>
-
-  <button class="reset-link" onclick="resetApp()">â† Start over</button>
+  <div class="screen3-footer">
+    <p class="note-text" id="note-text"></p>
+    <button class="reset-btn" onclick="resetApp()">← Start over</button>
+  </div>
 </div>
 
 <script>
@@ -366,7 +396,7 @@
     appState.email = email;
 
     btn.disabled = true;
-    btn.textContent = "Finding your tasksâ€¦";
+    btn.textContent = "Finding your tasks…";
 
     try {
       const res = await fetch(N8N_WEBHOOK, {
@@ -414,7 +444,7 @@
       const row = document.createElement("div");
       row.className = "task-row";
       row.innerHTML = `
-        <div class="task-desc">${task.task_description.length > 120 ? task.task_description.slice(0, 120) + "â€¦" : task.task_description}</div>
+        <div class="task-desc">${task.task_description.length > 120 ? task.task_description.slice(0, 120) + "…" : task.task_description}</div>
         <div class="task-input-wrap">
           <input type="number" class="task-pct" data-id="${task.id}" min="0" max="100" value="${defaultPct}" />
           <span class="pct-label">%</span>
@@ -441,15 +471,15 @@
     bar.className = "total-bar";
     if (total === 100) {
       bar.classList.add("ok");
-      bar.textContent = `Total: ${total}% âœ“ Ready`;
+      bar.textContent = `Total: ${total}% ✓ Ready`;
       btn.disabled = false;
     } else if (total > 100) {
       bar.classList.add("over");
-      bar.textContent = `Total: ${total}% â€” reduce by ${total - 100}%`;
+      bar.textContent = `Total: ${total}% — reduce by ${total - 100}%`;
       btn.disabled = true;
     } else {
       bar.classList.add("under");
-      bar.textContent = `Total: ${total}% â€” add ${100 - total}% more`;
+      bar.textContent = `Total: ${total}% — add ${100 - total}% more`;
       btn.disabled = true;
     }
   }
@@ -466,7 +496,7 @@
     });
 
     btn.disabled = true;
-    btn.textContent = "Calculatingâ€¦";
+    btn.textContent = "Calculating…";
 
     try {
       const res = await fetch(N8N_WEBHOOK, {
@@ -513,7 +543,7 @@
       ((data.displacement_risk_score || 0) * 100).toFixed(1) + "%";
 
     // AI-native role
-    document.getElementById("ai-native-text").textContent = data.ai_native_role_text || "â€”";
+    document.getElementById("ai-native-text").textContent = data.ai_native_role_text || "—";
 
     // Roadmap (numbered list if starts with "1.")
     const roadmapEl = document.getElementById("roadmap-list");
