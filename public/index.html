@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TaskShift â€” Know what AI is doing to your week</title>
+  <title>TaskShift  -  Know what AI is doing to your week</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -273,7 +273,7 @@
 </head>
 <body>
 
-<!-- â”€â”€ SCREEN 1: Role Entry â”€â”€ -->
+<!-- â"€â"€ SCREEN 1: Role Entry â"€â"€ -->
 <div id="screen1" class="screen active">
   <div>
     <h1>What's your role? <span id="s1-skeleton" class="skeleton-badge" style="display:none">SKELETON MODE</span></h1>
@@ -287,15 +287,15 @@
 
   <div>
     <label for="email-input">Email</label>
-    <input type="email" id="email-input" placeholder="Your email â€” unlocks your roadmap" />
+    <input type="email" id="email-input" placeholder="Your email  -  unlocks your roadmap" />
   </div>
 
-  <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks â†’</button>
+  <button class="primary" id="s1-btn" onclick="submitRole()">Show my tasks -></button>
   <div id="s1-error" class="error-msg" style="display:none"></div>
   <div id="s1-no-match" class="no-match-box" style="display:none"></div>
 </div>
 
-<!-- â”€â”€ SCREEN 2: Task Re-weight â”€â”€ -->
+<!-- â"€â"€ SCREEN 2: Task Re-weight â"€â"€ -->
 <div id="screen2" class="screen">
   <div>
     <h2>How do you actually spend your week?</h2>
@@ -308,11 +308,11 @@
 
   <div id="total-bar" class="total-bar"></div>
 
-  <button class="primary" id="s2-btn" onclick="submitCalculate()" disabled>Calculate my score â†’</button>
+  <button class="primary" id="s2-btn" onclick="submitCalculate()" disabled>Calculate my score -></button>
   <div id="s2-error" class="error-msg" style="display:none"></div>
 </div>
 
-<!-- â”€â”€ SCREEN 3: Results â”€â”€ -->
+<!-- â"€â"€ SCREEN 3: Results â"€â"€ -->
 <div id="screen3" class="screen">
   <div>
     <h2>Your TaskShift results <span id="s3-skeleton" class="skeleton-badge" style="display:none">SKELETON MODE</span></h2>
@@ -320,36 +320,36 @@
 
   <div id="s3-warn-banner" class="warn-banner" style="display:none"></div>
 
-  <div class=”score-cards”>
-    <div class=”score-card”>
-      <div class=”score-val” id=”exposure-val”>—</div>
-      <div class=”score-label”>Realised Exposure<br>Share of your week AI can already do</div>
-      <div class=”score-tip”>Based on real AI usage in this role today — not just what's theoretically possible.</div>
+  <div class="score-cards">
+    <div class="score-card">
+      <div class="score-val" id="exposure-val">—</div>
+      <div class="score-label">Realised Exposure<br>Share of your week AI can already do</div>
+      <div class="score-tip">Based on real AI usage in this role today — not just what's theoretically possible.</div>
     </div>
-    <div class=”score-card”>
-      <div class=”score-val” id=”risk-val”>—</div>
-      <div class=”score-label”>Displacement Risk<br>Share likely to shift away from this role</div>
-      <div class=”score-tip”>Filtered for real-world friction: trust, regulation, and demand growth.</div>
+    <div class="score-card">
+      <div class="score-val" id="risk-val">—</div>
+      <div class="score-label">Displacement Risk<br>Share likely to shift away from this role</div>
+      <div class="score-tip">Filtered for real-world friction: trust, regulation, and demand growth.</div>
     </div>
   </div>
 
-  <p class=”score-context” id=”score-context” style=”display:none”></p>
+  <p class="score-context" id="score-context" style="display:none"></p>
 
-  <hr class=”divider” />
+  <hr class="divider" />
 
   <div>
-    <div class=”section-heading”>How this role evolves with AI</div>
-    <div class=”prose-block” id=”ai-native-text”></div>
+    <div class="section-heading">How this role evolves with AI</div>
+    <div class="prose-block" id="ai-native-text"></div>
   </div>
 
   <div>
-    <div class=”section-heading”>Three tasks to lean into this week</div>
-    <ul class=”roadmap-list” id=”roadmap-list”></ul>
+    <div class="section-heading">Three tasks to lean into this week</div>
+    <ul class="roadmap-list" id="roadmap-list"></ul>
   </div>
 
   <p class="note-text" id="note-text"></p>
 
-  <button class="reset-link" onclick="resetApp()">â† Start over</button>
+  <button class="reset-link" onclick="resetApp()"><- Start over</button>
 </div>
 
 <script>
@@ -369,7 +369,7 @@
     window.scrollTo(0, 0);
   }
 
-  // â”€â”€ Screen 1 â”€â”€
+  // â"€â"€ Screen 1 â"€â"€
   async function submitRole() {
     const roleInput = document.getElementById("role-input").value.trim();
     const email = document.getElementById("email-input").value.trim();
@@ -385,7 +385,7 @@
     appState.email = email;
 
     btn.disabled = true;
-    btn.textContent = "Finding your tasksâ€¦";
+    btn.textContent = "Finding your tasks...";
 
     try {
       const res = await fetch(API_URL, {
@@ -411,7 +411,7 @@
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
     } finally {
       btn.disabled = false;
-      btn.textContent = "Show my tasks â†’";
+      btn.textContent = "Show my tasks ->";
     }
   }
 
@@ -433,7 +433,7 @@
       const row = document.createElement("div");
       row.className = "task-row";
       row.innerHTML = `
-        <div class="task-desc">${task.task_description.length > 120 ? task.task_description.slice(0, 120) + "â€¦" : task.task_description}</div>
+        <div class="task-desc">${task.task_description.length > 120 ? task.task_description.slice(0, 120) + "..." : task.task_description}</div>
         <div class="task-input-wrap">
           <input type="number" class="task-pct" data-id="${task.id}" min="0" max="100" value="${defaultPct}" />
           <span class="pct-label">%</span>
@@ -460,20 +460,20 @@
     bar.className = "total-bar";
     if (total === 100) {
       bar.classList.add("ok");
-      bar.textContent = `Total: ${total}% âœ“ Ready`;
+      bar.textContent = `Total: ${total}% OK Ready`;
       btn.disabled = false;
     } else if (total > 100) {
       bar.classList.add("over");
-      bar.textContent = `Total: ${total}% â€” reduce by ${total - 100}%`;
+      bar.textContent = `Total: ${total}%  -  reduce by ${total - 100}%`;
       btn.disabled = true;
     } else {
       bar.classList.add("under");
-      bar.textContent = `Total: ${total}% â€” add ${100 - total}% more`;
+      bar.textContent = `Total: ${total}%  -  add ${100 - total}% more`;
       btn.disabled = true;
     }
   }
 
-  // â”€â”€ Screen 2 â”€â”€
+  // â"€â"€ Screen 2 â"€â"€
   async function submitCalculate() {
     const errEl = document.getElementById("s2-error");
     const btn = document.getElementById("s2-btn");
@@ -485,7 +485,7 @@
     });
 
     btn.disabled = true;
-    btn.textContent = "Calculatingâ€¦";
+    btn.textContent = "Calculating...";
 
     try {
       const res = await fetch(API_URL, {
@@ -508,7 +508,7 @@
     } catch (e) {
       showError(errEl, "Something went wrong. Please try again. (" + e.message + ")");
       btn.disabled = false;
-      btn.textContent = "Calculate my score â†’";
+      btn.textContent = "Calculate my score ->";
     }
   }
 
@@ -532,18 +532,18 @@
       ((data.displacement_risk_score || 0) * 100).toFixed(1) + "%";
 
     // Score context
-    const ctxEl = document.getElementById(“score-context”);
+    const ctxEl = document.getElementById("score-context");
     if (data.score_context) {
       ctxEl.textContent = data.score_context;
-      ctxEl.style.display = “”;
+      ctxEl.style.display = "";
     } else {
-      ctxEl.style.display = “none”;
+      ctxEl.style.display = "none";
     }
 
     // AI-native role
-    document.getElementById(“ai-native-text”).textContent = data.ai_native_role_text || “â€””;
+    document.getElementById("ai-native-text").textContent = data.ai_native_role_text || "";
 
-    // Roadmap (numbered list if starts with “1.”)
+    // Roadmap (numbered list if starts with "1.")
     const roadmapEl = document.getElementById("roadmap-list");
     roadmapEl.innerHTML = "";
     const raw = (data.roadmap || data.roadmap_text || "").trim();
@@ -571,7 +571,7 @@
     document.getElementById("role-input").value = "";
     document.getElementById("email-input").value = "";
     document.getElementById("s1-error").style.display = "none";
-    document.getElementById("s2-btn").textContent = "Calculate my score â†’";
+    document.getElementById("s2-btn").textContent = "Calculate my score ->";
     show("screen1");
   }
 
