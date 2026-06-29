@@ -24,6 +24,9 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 let occupations = [];
 
 async function loadOccupations() {
+  // TODO(importer): replace or supplement this query once scripts/import_onet.js exists.
+  // Any script that writes valid rows to onet_tasks (occupation, onet_code, task_description,
+  // default_weight, + 4 scoring columns) will be picked up automatically on next restart.
   const resp = await fetch(
     `${SUPABASE_URL}/rest/v1/onet_tasks?select=occupation&order=occupation`,
     { headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY } }
@@ -32,6 +35,22 @@ async function loadOccupations() {
   const rows = await resp.json();
   occupations = [...new Set(rows.map(r => r.occupation))].sort();
   console.log(`Loaded ${occupations.length} occupation(s): ${occupations.join(', ')}`);
+}
+
+function buildScoreContext(taskDetails, reRounded, drRounded) {
+  if (!taskDetails.length || reRounded === 0) return null;
+  const topRe = [...taskDetails].sort((a, b) => b.realised_contrib - a.realised_contrib)[0];
+  const shortTask = topRe.task_description.split(' ').slice(0, 7).join(' ') + '…';
+  const protectionRatio = 1 - drRounded / reRounded;
+  let protection;
+  if (protectionRatio >= 0.6) {
+    protection = 'Human judgment and trust on the highest-exposure tasks keep displacement risk substantially lower than exposure.';
+  } else if (protectionRatio >= 0.3) {
+    protection = 'Human oversight and contextual factors moderate displacement risk below the raw exposure level.';
+  } else {
+    protection = 'The high-exposure tasks closely map to role demand, so displacement risk tracks exposure.';
+  }
+  return `Exposure is led by "${shortTask}" — where AI tools are most actively used in this field today. ${protection}`;
 }
 
 function buildMatchPrompt() {
@@ -205,6 +224,7 @@ app.post('/api/taskshift', async (req, res) => {
     const sorted = [...taskDetails].sort((a, b) => a.displacement_contrib - b.displacement_contrib);
     const tasksToClimbToward = sorted.slice(0, 3).map(t => t.task_description);
 
+    const scoreContext = buildScoreContext(taskDetails, reRounded, drRounded);
     let aiNativeRoleText = null, roadmapText = null;
     try {
       const c2Resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -218,22 +238,21 @@ app.post('/api/taskshift', async (req, res) => {
             {
               role: 'system',
               content: [
-                'You write structured career guidance for a working professional.',
-                'Your output MUST follow this exact format — include the marker lines verbatim:',
+                'You write sharp, specific career guidance for someone whose work is being reshaped by AI.',
+                'Your output MUST follow this exact format — include both marker lines verbatim:',
                 '',
                 '[AI_NATIVE_ROLE]',
-                '<2 sentences starting with the occupation name>',
+                '<Exactly 2 sentences. Describe how this role changes as AI handles more routine work — what the person does MORE of, and where their judgment becomes the differentiator. Do NOT summarise the job. Do NOT start with the occupation name. Generic sentences like "X manages Y and collaborates with Z" are unacceptable.>',
                 '[ROADMAP]',
-                '1. <first step — max 2 sentences>',
-                '2. <second step — max 2 sentences>',
-                '3. <third step — max 2 sentences>',
+                '1. <One concrete action tied to task 1. Max 2 sentences. No padding or explanation.>',
+                '2. <One concrete action tied to task 2. Max 2 sentences. No padding or explanation.>',
+                '3. <One concrete action tied to task 3. Max 2 sentences. No padding or explanation.>',
                 '',
                 'Rules:',
                 '- Do NOT invent numbers, percentages, or scores.',
-                '- No doom-score language: avoid "at risk", "threatened", "replaced", "obsolete".',
-                '- Be specific and actionable. Generic advice is not acceptable.',
-                '- Base the roadmap strictly on the three tasks provided.',
-                '- Write in plain, direct language.'
+                '- Avoid: "at risk", "threatened", "replaced", "obsolete", "navigate", "landscape", "leverage".',
+                '- Each roadmap step must name one specific action. No generic advice.',
+                '- Sentences under 25 words. Plain, direct language only.'
               ].join('\n')
             },
             {
@@ -277,7 +296,7 @@ app.post('/api/taskshift', async (req, res) => {
     return res.json({
       action: 'calculate', matched_occupation: matchedOccupation, match_confidence: matchConfidence,
       realised_exposure_score: reRounded, displacement_risk_score: drRounded,
-      ai_native_role_text: aiNativeRoleText, roadmap: roadmapText
+      score_context: scoreContext, ai_native_role_text: aiNativeRoleText, roadmap: roadmapText
     });
   }
 

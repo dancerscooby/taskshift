@@ -212,6 +212,17 @@
 
     .note-text { font-size: 0.8rem; color: #9ca3af; line-height: 1.5; }
 
+    .score-context {
+      font-size: 0.85rem;
+      color: #6b7280;
+      line-height: 1.6;
+      padding: 12px 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      border-left: 3px solid #c7d2fe;
+      margin: 0;
+    }
+
     .no-match-box {
       background: #f0f9ff;
       border: 1px solid #bae6fd;
@@ -309,29 +320,31 @@
 
   <div id="s3-warn-banner" class="warn-banner" style="display:none"></div>
 
-  <div class="score-cards">
-    <div class="score-card">
-      <div class="score-val" id="exposure-val">â€”</div>
-      <div class="score-label">Realised Exposure<br>Share of your week AI can already do</div>
-      <div class="score-tip">Based on real AI usage in this role today â€” not just what's theoretically possible.</div>
+  <div class=”score-cards”>
+    <div class=”score-card”>
+      <div class=”score-val” id=”exposure-val”>—</div>
+      <div class=”score-label”>Realised Exposure<br>Share of your week AI can already do</div>
+      <div class=”score-tip”>Based on real AI usage in this role today — not just what's theoretically possible.</div>
     </div>
-    <div class="score-card">
-      <div class="score-val" id="risk-val">â€”</div>
-      <div class="score-label">Displacement Risk<br>Share likely to shift away from this role</div>
-      <div class="score-tip">Filtered for real-world friction: trust, regulation, and demand growth.</div>
+    <div class=”score-card”>
+      <div class=”score-val” id=”risk-val”>—</div>
+      <div class=”score-label”>Displacement Risk<br>Share likely to shift away from this role</div>
+      <div class=”score-tip”>Filtered for real-world friction: trust, regulation, and demand growth.</div>
     </div>
   </div>
 
-  <hr class="divider" />
+  <p class=”score-context” id=”score-context” style=”display:none”></p>
+
+  <hr class=”divider” />
 
   <div>
-    <div class="section-heading">What this role looks like when you move up</div>
-    <div class="prose-block" id="ai-native-text"></div>
+    <div class=”section-heading”>How this role evolves with AI</div>
+    <div class=”prose-block” id=”ai-native-text”></div>
   </div>
 
   <div>
-    <div class="section-heading">Three tasks to climb toward this week</div>
-    <ul class="roadmap-list" id="roadmap-list"></ul>
+    <div class=”section-heading”>Three tasks to lean into this week</div>
+    <ul class=”roadmap-list” id=”roadmap-list”></ul>
   </div>
 
   <p class="note-text" id="note-text"></p>
@@ -518,10 +531,19 @@
     document.getElementById("risk-val").textContent =
       ((data.displacement_risk_score || 0) * 100).toFixed(1) + "%";
 
-    // AI-native role
-    document.getElementById("ai-native-text").textContent = data.ai_native_role_text || "â€”";
+    // Score context
+    const ctxEl = document.getElementById(“score-context”);
+    if (data.score_context) {
+      ctxEl.textContent = data.score_context;
+      ctxEl.style.display = “”;
+    } else {
+      ctxEl.style.display = “none”;
+    }
 
-    // Roadmap (numbered list if starts with "1.")
+    // AI-native role
+    document.getElementById(“ai-native-text”).textContent = data.ai_native_role_text || “â€””;
+
+    // Roadmap (numbered list if starts with “1.”)
     const roadmapEl = document.getElementById("roadmap-list");
     roadmapEl.innerHTML = "";
     const raw = (data.roadmap || data.roadmap_text || "").trim();
